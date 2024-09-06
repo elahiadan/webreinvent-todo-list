@@ -1,15 +1,13 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WEBREINVENT TO-DO LIST</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <style>
-        .completed {
-            text-decoration: line-through;
-            color: gray;
-        }
-
         .hide {
             display: none;
         }
@@ -17,27 +15,55 @@
 </head>
 
 <body>
-    <h1>TO-DO LIST</h1>
+    <div class="container mt-4">
+        <h1>TO-DO LIST</h1>
 
-    <form id="task-form">
-        <input type="text" name="title" id="task-title" required>
-        <button type="submit">Add Task</button>
-    </form>
+        <form id="task-form" class="mb-3">
+            <div class="input-group">
+                <input type="text" class="form-control" name="title" id="task-title" required>
+                <button type="submit" class="btn btn-primary">Add Task</button>
+            </div>
+        </form>
 
-    <button id="show-all">Show All Tasks</button>
+        <button id="show-all" class="btn btn-secondary mb-3">Show All Tasks</button>
 
-    <ul id="task-list">
-        @foreach($tasks as $task)
-        <li data-id="{{ $task->id }}" class="{{ $task->is_completed ? 'completed hide' : '' }}">
-            <input type="checkbox" class="complete-task" {{ $task->is_completed ? 'checked' : '' }}>
-            {{ $task->title }}
-            <button class="delete-task">Delete</button>
-        </li>
-        @endforeach
-    </ul>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th scope="col">#</th>
+                    <th scope="col">Task</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Action</th>
+                </tr>
+            </thead>
+            <tbody id="task-list">
+                @foreach($tasks as $task)
+                <tr class="{{ $task->is_completed ? 'completed hide' : '' }}">
+                    <th scope="row">{{$task->id}}</th>
+                    <td>{{ $task->title }}</td>
+                    <td class="status">{{$task->is_completed ? 'Done' : ''}}</td>
+                    <td>
+                        <div class="d-flex align-items-center">
+                            <input type="checkbox" class="complete-task" data-id="{{ $task->id }}" {{ $task->is_completed ? 'checked' : '' }}>
+                            <button class="btn btn-danger btn-sm ms-2 delete-task" data-id="{{ $task->id }}" aria-label="Delete Task">Delete</button>
+                        </div>
+                    </td>
+                </tr>
+                @endforeach
+            </tbody>
+        </table>
+    </div>
 
     <script>
         $(document).ready(function() {
+            // Set up CSRF token for all AJAX requests
+            $.ajaxSetup({
+                headers: {
+                    'X-CSRF-TOKEN': "{{ csrf_token() }}"
+                }
+            });
+
+            // Add new task
             $('#task-form').submit(function(e) {
                 e.preventDefault();
                 let title = $("#task-title").val();
@@ -45,16 +71,22 @@
                     url: "{{route('task.store')}}",
                     type: 'POST',
                     data: {
-                        title,
-                        _token: "{{ csrf_token() }}"
+                        title
                     },
                     success: function(res) {
                         if (res.success) {
                             $("#task-title").val('');
-                            let html = `<li data-id="${ res.task.id }"><input type="checkbox" class="complete-task" ${ res.task.is_completed ? 'checked' : '' }>
-                                            ${ res.task.title }
-                                            <button class="delete-task">Delete</button>
-                                        </li>`;
+                            let html = `<tr class="${ res.task.is_completed ? 'completed hide' : '' }">
+                                    <th scope="row">${ res.task.id }</th>
+                                    <td>${ res.task.title }</td>
+                                    <td class="status">${res.task.is_completed ? 'Done' : ''}</td>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <input type="checkbox" class="complete-task" data-id="${ res.task.id }" ${ res.task.is_completed ? 'checked' : '' }>
+                                            <button class="btn btn-danger btn-sm ms-2 delete-task" data-id="${ res.task.id }" aria-label="Delete Task">Delete</button>
+                                        </div>
+                                    </td>
+                                </tr>`;
                             $('#task-list').append(html);
                         } else {
                             alert(res.errors.title);
@@ -63,11 +95,12 @@
                 });
             });
 
+            // Toggle visibility of completed tasks
             let status = false;
             $('#show-all').click(function() {
                 status = !status;
                 if (status) {
-                    $('#show-all').text('Hide completed Tasks');
+                    $('#show-all').text('Hide Completed Tasks');
                     $('.hide').show();
                 } else {
                     $('#show-all').text('Show All Tasks');
@@ -75,36 +108,36 @@
                 }
             });
 
+            // Mark task as complete/incomplete
             $('#task-list').on('change', '.complete-task', function() {
-                var $li = $(this).closest('li');
-                var taskId = $li.data('id');
+                let $tr = $(this).closest('tr');
+                let taskId = $(this).data('id');
                 $.ajax({
                     url: `{{route('task.update')}}`,
                     type: 'POST',
                     data: {
-                        id: taskId,
-                        _token: "{{ csrf_token() }}"
+                        id: taskId
                     },
-                    success: function(res) {
-                        $li.toggleClass('completed hide');
-                        $li.find('.complete-task').prop('checked', $li.hasClass('completed'));
+                    success: function() {
+                        $tr.toggleClass('hide');
+                        $tr.find('.status').text($tr.hasClass('hide') ? 'Done' : '');
                     }
                 });
             });
 
+            // Delete task
             $('#task-list').on('click', '.delete-task', function() {
-                if (confirm('Are you sure to delete this task?')) {
-                    var $li = $(this).closest('li');
-                    var taskId = $li.data('id');
+                if (confirm('Are you sure you want to delete this task?')) {
+                    let $tr = $(this).closest('tr');
+                    let taskId = $(this).data('id');
                     $.ajax({
                         url: `{{route('task.delete')}}`,
                         type: 'POST',
                         data: {
-                            id: taskId,
-                            _token: "{{ csrf_token() }}"
+                            id: taskId
                         },
                         success: function() {
-                            $li.remove();
+                            $tr.remove();
                         }
                     });
                 }
